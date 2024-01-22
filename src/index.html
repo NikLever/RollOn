@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <!--<link href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans|Kavivanar" rel="stylesheet">-->
+  <title>RollOn</title>
+  <style>
+    body{ padding: 0; margin: 0; }
+    canvas{ position: fixed; top: 0; left: 0; }
+  </style>
+</head>
+<body>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "../../../node_modules/three/build/three.module.js",
+        "three/addons/": "../../../node_modules/three/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import { Game } from "./Game.js"
+    const game = new Game();
+  </script>
+</body>
+</html>
