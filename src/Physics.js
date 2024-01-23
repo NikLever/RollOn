@@ -132,6 +132,12 @@ export class Physics{
 		if ( quaternion !== null ) desc.setRotation( quaternion );
 
 		const body = this.world.createRigidBody( desc );
+
+        if (mass>0){
+            body.setLinearDamping(1.2);
+            body.setAngularDamping(1.2);
+        }
+
 		this.world.createCollider( shape, body );
 
 		return body;
@@ -156,6 +162,12 @@ export class Physics{
 		body.setLinvel( velocity );
 
 	}
+
+    applyImpulse( mesh, force ){
+        const body = this.meshMap.get( mesh );
+
+        body.applyImpulse( force, true );
+    }
 
 	step() {
         const dt = this.clock.getDelta();

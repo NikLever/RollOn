@@ -347,12 +347,17 @@ class JoyStick{
 		this.origin = { left:this.domElement.offsetLeft, top:this.domElement.offsetTop };
 		this.rotationDamping = options.rotationDamping || 0.06;
 		this.moveDamping = options.moveDamping || 0.01;
+		this.mouseDown = false;
 		if (this.domElement!=undefined){
 			const joystick = this;
 			if ('ontouchstart' in window){
-				this.domElement.addEventListener('touchstart', function(evt){ evt.preventDefault(); joystick.tap(evt); evt.stopPropagation();});
+				this.domElement.addEventListener('touchstart', function(evt){ evt.preventDefault(); joystick.tap(evt); evt.stopPropagation();}, { passive: false });
+				document.addEventListener( "touchmove", function(evt){ evt.preventDefault(); joystick.move(evt); evt.stopPropagation();}, { passive: false });
+				document.addEventListener( "touchend", function(evt){ evt.preventDefault(); joystick.up(evt); evt.stopPropagation();}, { passive: false });
 			}else{
-				this.domElement.addEventListener('mousedown', function(evt){ evt.preventDefault(); joystick.tap(evt); evt.stopPropagation();});
+				this.domElement.addEventListener('mousedown', function(evt){ evt.preventDefault(); joystick.tap(evt); evt.stopPropagation();}, { passive: false });
+				document.addEventListener( "mousemove", function(evt){ evt.preventDefault(); joystick.move(evt); evt.stopPropagation();}, { passive: false });
+				document.addEventListener( "mouseup", function(evt){ evt.preventDefault(); joystick.up(evt); evt.stopPropagation();}, { passive: false });
 			}
 		}
 	}
@@ -367,17 +372,20 @@ class JoyStick{
 		evt = evt || window.event;
 		// get the mouse cursor position at startup:
 		this.offset = this.getMousePosition(evt);
-		const joystick = this;
+		this.mouseDown = true;
+		/*const joystick = this;
 		if ('ontouchstart' in window){
-			document.ontouchmove = function(evt){ evt.preventDefault(); joystick.move(evt); };
-			document.ontouchend =  function(evt){ evt.preventDefault(); joystick.up(evt); };
+			document.addEventListener( "touchmove", this.moveFunc.bind(this, evt), { passive: false });
+			document.addEventListener( "touchend", this.upFunc.bind(this, evt), { passive: false });
 		}else{
-			document.onmousemove = function(evt){ evt.preventDefault(); joystick.move(evt); };
-			document.onmouseup = function(evt){ evt.preventDefault(); joystick.up(evt); };
-		}
+			document.addEventListener( "mousemove", this.moveFunc.bind(this, evt), { passive: false });
+			document.addEventListener( "mouseup", this.upFunc.bind(this, evt), { passive: false });
+		}*/
 	}
 	
 	move(evt){
+		if (!this.mouseDown) return;
+		//console.log('move');
 		evt = evt || window.event;
 		const mouse = this.getMousePosition(evt);
 		// calculate the new cursor position:
@@ -411,13 +419,16 @@ class JoyStick{
 	}
 	
 	up(evt){
-		if ('ontouchstart' in window){
-			document.ontouchmove = null;
-			document.touchend = null;
+		//console.log('up');
+		/*if ('ontouchstart' in window){
+			document.removeEventListener("touchmove", this.moveFunc.bind(this, evt), { passive: false } );
+			document.removeEventListener("touchend", this.upFunc.bind(this, evt), { passive: false } );
 		}else{
-			document.onmousemove = null;
-			document.onmouseup = null;
-		}
+			document.removeEventListener("mousemove", this.moveFunc.bind(this, evt), { passive: false } );
+			document.removeEventListener("mouseup", this.upFunc.bind(this, evt), { passive: false });
+		}*/
+		this.mouseDown = false;
+
 		this.domElement.style.top = `${this.origin.top}px`;
 		this.domElement.style.left = `${this.origin.left}px`;
 		

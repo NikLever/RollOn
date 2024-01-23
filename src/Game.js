@@ -7,34 +7,37 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { Physics } from "./Physics"
-import { Tween } from "./Toon3D"
+import { Tween, JoyStick } from "./Toon3D"
 import { SFX } from "./SFX"
 import { UI } from "./UI"
 
 export class Game{
+    static modes = Object.freeze({
+        NONE:   0,
+        PRELOAD: 1,
+        INITIALISING:  2,
+        CREATING_LEVEL: 3,
+        ACTIVE: 4,
+        IN_CUP: 5,
+        LEVEL_COMPLETE: 6,
+        GAMEOVER: 7
+    });
+
     constructor(){
         this.init();
 
         this.clock = new Clock();
 
-        //this.raycaster = new Raycaster();
-
-        this.modes = Object.freeze({
-			NONE:   0,
-			PRELOAD: 1,
-			INITIALISING:  2,
-			CREATING_LEVEL: 3,
-			ACTIVE: 4,
-			IN_CUP: 5,
-			GAMEOVER: 6
-		});
+        this.raycaster = new Raycaster();
+        this.down = new Vector3(0, -1, 0);
 
         this.tmpVec3 = new Vector3();
-
-        this.cellSize = 1.6;
+        this.input = new Vector3();
 
         this.score = 0;
         this.levelIndex = 0;
+
+        this.stepPhysics = false;
 
         if ( localStorage ){
             if (false){
@@ -49,11 +52,18 @@ export class Game{
             if (levelIndex != null) this.levelIndex = levelIndex;
         }
 
-       // this.levelIndex = 11;
-
-        //this._hints = this.hints;
-
+        this.joystick = new JoyStick({ onMove: (x, z) => {
+            this.input.x = x;
+            this.input.z = -z;
+        } })
         //this.loadSounds();
+
+        const scope = this;
+
+        function onMove(x, z){
+            scope.input.x = x;
+            scope.input.z = z;
+        }
 
     }
 
@@ -80,7 +90,7 @@ export class Game{
         this.scene.background = new Color( 0xaaaaaa );
     
         this.camera = new PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 100 );
-        this.camera.position.set(0, 0.5, 6);
+        this.camera.position.set(0, 3.5, 6);
 
         const ambient = new HemisphereLight(0xffffff, 0xbbbbff, 0.5);
         this.scene.add(ambient);
@@ -97,6 +107,7 @@ export class Game{
         const controls = new OrbitControls( this.camera, this.renderer.domElement );
         controls.target.y = 0.0;
         controls.update();
+        controls.enablePan = controls.enableZoom = false;
         this.controls = controls;
             
         window.addEventListener( 'resize', this.resize.bind(this), false);
@@ -112,26 +123,17 @@ export class Game{
 
     nextLevel(){
         this.stepPhysics = false;
+        this.levelIndex++;
+        this.loadLevel(this.levelIndex);
     }
 
     async initPhysics(){
         this.physics = new Physics();
         await this.physics.initPhysics();
 
-        //this.ui = new UI(this);
-
-        //this.ui.score = this.score; 
-        
-        //this.initLevel(this.levelIndex);
+        if (this.level && this.physics.meshes.length == 0) this.initLevelPhysics();
 
         this.update();
-    }
-
-    initLevel(index){
-        if (this.level){
-            this.scene.remove(this.level);
-            this.physics.reset();
-        }
     }
 
     loadSkybox(){
@@ -150,14 +152,9 @@ export class Game{
     }
 
     initLevelPhysics(){
-        //this.physics.addMesh(this.bits.ball, 6);
-        //this.physics.addMesh(this.bits.cup);
-        //this.physics.setCollisionEventsActive(this.bits.cup);
-        //this.physics.setCollisionEventsActive(this.bits.ball);
-
-        //this.level.children.forEach( pipe => {
-        //    this.physics.addMesh(pipe);
-        //})
+        this.physics.addMesh(this.ball, 1);
+        this.physics.addMesh(this.collider);
+        this.stepPhysics = true;
     }
 
     setEnvironment(){
@@ -196,6 +193,8 @@ export class Game{
                         switch(child.name){
                             case "Ball":
                                 this.bits[child.name] = child;
+                                const geometry = new SphereGeometry(0.3);
+                                this.ball = new Mesh(geometry, child.material);
                                 console.log(`Game.loadBits ${child.name}`);
                                 break;
                         }
@@ -203,6 +202,8 @@ export class Game{
                         this.bits[child.name] = child;
                         console.log(`Game.loadBits ${child.name}`);
                     }
+
+                    this.scene.add(this.ball);
                 });
 
                 this.initPhysics();
@@ -219,7 +220,21 @@ export class Game{
         );
     }
 
+    clearLevel(){
+
+        this.level.forEach( mesh => {
+            if (!mesh.userData.noDispose){
+                mesh.geometry.dispose();
+                if (mesh.material.map) mesh.material.map.dispose();
+                mesh.material.dispose();
+            }
+            this.scene.remove(mesh);
+        })
+    }
+
     loadLevel(index){
+        if ( this.level ) this.clearLevel();
+
         const loader = new GLTFLoader( );
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath( 'draco-gltf/' );
@@ -233,25 +248,44 @@ export class Game{
             name,
             // called when the resource is loaded
             gltf => {
-                    
-                gltf.scene.traverse( child => {
-                    if (child){
+                this.level = [];
+                let obj;
+                gltf.scene.traverse( child => { 
+                    obj = child;
+                    if (child && child.name){
                         console.log(`Game.loadLevel ${child.name}`)
                         switch(child.name){
                         case "Collider":
                             child.visible = false;
                             this.collider = child;
+                            this.level.push(child);
                             break;
                         case "start":
-                            //this.ball.position.copy(child.position);
+                            this.ball.position.copy(child.position);
                             break;
+                        case "finish":
+                            this.finish = child;
+                            break;
+                        case "Level":
+                            this.level.push(child);
+                            break;
+                        }
+                        if (child.name.startsWith("Box")){
+                            const pickup = this.bits[child.name].clone();
+                            pickup.position.copy(child.position);
+                            //this.scene.add(pickup);
+                            this.level.push(pickup);
+                            pickup.userData.noDispose = true;
                         }
                     }
                 });
 
-                this.scene.add(gltf.scene);
+                this.level.forEach( mesh => {
+                    this.scene.add(mesh);
+                })
+                
 
-                this.initLevelPhysics();
+                if (this.physics.isReady) this.initLevelPhysics();
             },
             // called while loading is progressing
             null,
@@ -270,7 +304,17 @@ export class Game{
         const dt = this.clock.getDelta();
 
         if (this.stepPhysics){
+            if (this.input.x!=0 || this.input.z!=0){
+                this.camera.getWorldDirection(this.tmpVec3).multiply(this.input).multiplyScalar(0.1);
+                //this.tmpVec3.set( this.input.x, 0, this.input.y ).multiplyScalar(0.1);
+                this.physics.applyImpulse( this.ball, this.tmpVec3 )
+            }
             this.physics.step();
+        }
+
+        if (this.controls && this.ball){
+            this.controls.target.copy(this.ball.position)
+            this.controls.update();
         }
         //if (this.tween) this.tween.update(dt);
         this.renderer.render( this.scene, this.camera );  
