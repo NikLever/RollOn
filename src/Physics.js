@@ -135,7 +135,7 @@ export class Physics{
 
         if (mass>0){
             body.setLinearDamping(1.2);
-            body.setAngularDamping(1.2);
+            body.setAngularDamping(0.5);
         }
 
 		this.world.createCollider( shape, body );

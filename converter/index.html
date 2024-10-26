@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' 'self'">-->
+
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <!--<link href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans|Kavivanar" rel="stylesheet">-->
+  <title>RollOn - converter</title>
+  <style>
+    body{ padding: 0; margin: 0; }
+    canvas{ position: fixed; top: 0; left: 0; }
+    button{ z-index: 100; position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);}
+  </style>
+</head>
+<body>
+  <button onClick="converter.nextLevel()" style="z-index: 100;">Next Level</button>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "../node_modules/three/build/three.module.js",
+        "three/addons/": "../node_modules/three/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import { Converter } from "./Converter.js"
+    const converter = new Converter();
+    window.converter = converter;
+  </script>
+</body>
+</html>

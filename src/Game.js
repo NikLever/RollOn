@@ -1,10 +1,12 @@
 import {
     Clock, Raycaster, Vector3, Scene, Color, PerspectiveCamera, HemisphereLight, DirectionalLight,
-    WebGLRenderer, Vector2, Group, Mesh, SphereGeometry, PMREMGenerator, CubeTextureLoader, MeshBasicMaterial
+    WebGLRenderer, Vector2, Group, Mesh, SphereGeometry, PMREMGenerator, CubeTextureLoader, MeshBasicMaterial, Matrix4,
+    Quaternion
 } from "three"
 import { OrbitControls } from "three/addons/controls/OrbitControls.js"
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { Physics } from "./Physics"
 import { Tween, JoyStick } from "./Toon3D"
@@ -32,7 +34,11 @@ export class Game{
         this.down = new Vector3(0, -1, 0);
 
         this.tmpVec3 = new Vector3();
+        this.tmpVec3b = new Vector3();
         this.input = new Vector3();
+        this.tmpQuat = new Quaternion();
+
+        this.tmpMat4 = new Matrix4();
 
         this.score = 0;
         this.levelIndex = 0;
@@ -53,17 +59,17 @@ export class Game{
         }
 
         this.joystick = new JoyStick({ onMove: (x, z) => {
-            this.input.x = x;
-            this.input.z = -z;
+            this.input.x = z;
+            this.input.z = -x;
         } })
         //this.loadSounds();
 
-        const scope = this;
+        /*const scope = this;
 
         function onMove(x, z){
             scope.input.x = x;
             scope.input.z = z;
-        }
+        }*/
 
     }
 
@@ -108,6 +114,7 @@ export class Game{
         controls.target.y = 0.0;
         controls.update();
         controls.enablePan = controls.enableZoom = false;
+        controls.minDistance = controls.maxDistance = 7;
         this.controls = controls;
             
         window.addEventListener( 'resize', this.resize.bind(this), false);
@@ -117,8 +124,6 @@ export class Game{
         this.loadSkybox();
             
         this.loadBits();
-
-        this.loadLevel(1);
     }
 
     nextLevel(){
@@ -197,17 +202,25 @@ export class Game{
                                 this.ball = new Mesh(geometry, child.material);
                                 console.log(`Game.loadBits ${child.name}`);
                                 break;
+                            default:
+                                if (child.name.indexOf( '_' ) == -1){
+                                    this.bits[child.name] = child;
+                                    console.log(`Game.loadBits ${child.name}`);
+                                }
+                                break;
                         }
                     }else{
                         this.bits[child.name] = child;
                         console.log(`Game.loadBits ${child.name}`);
                     }
 
-                    this.scene.add(this.ball);
                 });
+
+                if ( this.ball ) this.scene.add(this.ball);
 
                 this.initPhysics();
 
+                this.loadLevel(1);
             },
             // called while loading is progressing
             null,
@@ -224,9 +237,11 @@ export class Game{
 
         this.level.forEach( mesh => {
             if (!mesh.userData.noDispose){
-                mesh.geometry.dispose();
-                if (mesh.material.map) mesh.material.map.dispose();
-                mesh.material.dispose();
+                if (mesh.geometry) mesh.geometry.dispose();
+                if (mesh.material){
+                    if (mesh.material.map) mesh.material.map.dispose();
+                    mesh.material.dispose();
+                }
             }
             this.scene.remove(mesh);
         })
@@ -235,7 +250,7 @@ export class Game{
     loadLevel(index){
         if ( this.level ) this.clearLevel();
 
-        const loader = new GLTFLoader( );
+        const loader = new GLTFLoader( ).setPath('levels/');
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath( 'draco-gltf/' );
         loader.setDRACOLoader( dracoLoader );
@@ -253,8 +268,11 @@ export class Game{
                 gltf.scene.traverse( child => { 
                     obj = child;
                     if (child && child.name){
-                        console.log(`Game.loadLevel ${child.name}`)
-                        switch(child.name){
+                        let name = child.name;
+                        const idx = name.indexOf( '0' );
+                        if (idx != -1) name = name.substring(0, idx);
+                        console.log(`Game.loadLevel ${name}`)
+                        switch(name){
                         case "Collider":
                             child.visible = false;
                             this.collider = child;
@@ -270,8 +288,8 @@ export class Game{
                             this.level.push(child);
                             break;
                         }
-                        if (child.name.startsWith("Box")){
-                            const pickup = this.bits[child.name].clone();
+                        if (name.startsWith("Box")){
+                            const pickup = this.bits[name].clone();
                             pickup.position.copy(child.position);
                             //this.scene.add(pickup);
                             this.level.push(pickup);
@@ -305,15 +323,24 @@ export class Game{
 
         if (this.stepPhysics){
             if (this.input.x!=0 || this.input.z!=0){
-                this.camera.getWorldDirection(this.tmpVec3).multiply(this.input).multiplyScalar(0.1);
+                this.camera.getWorldQuaternion( this.tmpQuat );
+                //this.camera.getWorldDirection(this.tmpVec3).multiply(this.input).multiplyScalar(0.1);
+                this.tmpVec3.copy(this.input);
+                this.tmpVec3.applyQuaternion(this.tmpQuat);
+                this.tmpVec3.multiplyScalar(dt*4);
                 //this.tmpVec3.set( this.input.x, 0, this.input.y ).multiplyScalar(0.1);
                 this.physics.applyImpulse( this.ball, this.tmpVec3 )
             }
             this.physics.step();
+
+            if (this.ball.position.distanceTo(this.finish.position)<0.2){
+                this.nextLevel();
+            }
         }
 
         if (this.controls && this.ball){
-            this.controls.target.copy(this.ball.position)
+            this.controls.target.copy(this.ball.position);
+            this.camera.position.y = this.ball.position.y + 4;
             this.controls.update();
         }
         //if (this.tween) this.tween.update(dt);
