@@ -3,15 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="icon" type="image/svg+xml" href="./logo.svg" />
   <!--<link href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans|Kavivanar" rel="stylesheet">-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DynaPuff:wght@400..700&display=swap" rel="stylesheet">
   <title>RollOn</title>
   <style>
     body{ padding: 0; margin: 0; }
     canvas{ position: fixed; top: 0; left: 0; }
+    #ui{
+      position: absolute;
+      left: 0;
+      top: 30px;
+      width: 100%;
+      z-index: 100;
+      display: flex;
+      justify-content: space-evenly;
+    }
+    label{
+      background-color: darkorange;
+      border-radius: 15px;
+      color: maroon;
+      font: 25px "DynaPuff"; 
+      padding: 15px;
+    }
   </style>
 </head>
 <body>
+  <div id="ui">
+    <label id="level">Level: 1</label>
+    <label id="balls">Balls: 5</label>
+    <label id="bonus">Bonus: 0000</label>
+    <label id="time">Time: 00:00</label>
+  </div>
   <script type="importmap">
     {
       "imports": {

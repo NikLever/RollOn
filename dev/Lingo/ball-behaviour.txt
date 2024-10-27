@@ -1,0 +1,751 @@
+global playMode, holeNum, styleNum
+global cam, camMode, camStart, camBuffer
+global gScore, gLives, gNewLevel, gMode
+
+property w, hk, ball, ballRB, course, courseRB, movingBits, movingBitsRB
+property sky, arrow, snowflake
+property bitsMember, courseMember, styleMember
+property startNull, finishNull
+property upkey, downkey, leftkey, rightkey, spacekey
+property ballStopCheck, arrowY, arrowYmax
+property blackFade
+property pShadow
+property dirList
+property pTeleA, pTeleB, pTeleAll, pTelePos, pSpinner
+property pStyle, pProtected
+
+property pStartTime
+property pBallPos, pSpeed, pSpeedVector, pHeight, pGroundPos, pGroundNorm, pGroundSurf
+property pHorizLevel, pVertLevel, pLevelMax, pPowerFactor, pInertia
+property pBGRots, pPacks, pBgT, pTimeStr, pPacksCollected, _DEBUG
+
+property prevCamMode
+
+on beginSprite me
+  _DEBUG = false
+  gNewLevel = 0
+  
+  member(2).resetWorld()
+  
+  bitsMember = member(29)
+  bitsMember.resetWorld()
+  
+  styleMember = member(26+(styleNum*4))
+  styleMember.resetWorld()
+  
+  if holeNum>21 then
+    courseMember = 36 + holeNum
+  else
+    courseMember = 29 + styleNum + holeNum
+  end if
+  sprite(2).memberNum = courseMember
+  w = member( courseMember )
+  w.resetWorld()
+  w.directionalPreset = #bottomLeft
+  
+  w.camera[1].hither = 1
+  w.camera[1].yon = 200000
+  
+  hk = member( 11 )
+  hk.initialize( w, 1, 0.025 )
+  
+  put "Got to camera mode with holeNum " & holeNum && "styleNum  " & styleNum
+  
+  camMode = camStart[holeNum]
+  styles = ["Garden", "Stately", "Hanger", "Sushi", "Sea", "Modern", "Mountains"]
+  pStyle = styles[styleNum]
+  put "STYLE = " & pStyle
+  
+  createObjects()
+  initVars()
+  
+end 
+
+on createObjects me
+  
+  -- setup all objects
+  
+  -- havok
+  hk.gravity = vector(0,-200,0)
+  
+  -- nulls
+  startNull = w.model("start")
+  finishNull = w.model("finish")
+  
+  -- ball
+  createBall
+  
+  --shadow
+  pShadow = w.cloneModelFromCastmember ("BallShadow", "BallShadow", bitsMember)
+  pShadow.scale(1.5, 1.5, 1.5)
+  
+  -- course
+  if holeNum<10 then
+    mn = "Level0"&holeNum
+  else
+    mn = "Level"&holeNum
+  end if
+  course = w.model(mn)
+  id = (holeNum mod 8) + 1
+  
+  course.addModifier(#meshdeform)
+  courseRB = hk.makeFixedRigidBody(course.name,false)
+  courseRB.friction = 0.8--0.8
+  
+  
+  --Packs
+  pPacks = []
+  m = w.cloneModelFromCastmember("Box1", "BoxRK", bitsMember)
+  w.model("BoxRK").addChild(m, #preserveParent)
+  pPacks.add(m)
+  m = w.cloneModelFromCastmember("Box2", "BoxFrosties", bitsMember)
+  w.model("BoxFrosties").addChild(m, #preserveParent)
+  pPacks.add(m)
+  m = w.cloneModelFromCastmember("Box3", "BoxLoops", bitsMember)
+  w.model("BoxLoops").addChild(m, #preserveParent)
+  pPacks.add(m)
+  m = w.cloneModelFromCastmember("Box4", "BoxRicicles", bitsMember)
+  w.model("BoxRicicles").addChild(m, #preserveParent)
+  pPacks.add(m)
+  m = w.cloneModelFromCastmember("Box5", "BoxCoco", bitsMember)
+  w.model("BoxCoco").addChild(m, #preserveParent)
+  pPacks.add(m)
+  m = w.cloneModelFromCastmember("Box6", "BoxCornflakes", bitsMember)
+  w.model("BoxCornflakes").addChild(m, #preserveParent)
+  pPacks.add(m) 
+  
+  --arrow
+  arrow = w.cloneModelFromCastmember ("Arrow", "Arrow", bitsMember)
+  arrow.transform = finishNull.getWorldTransform()
+  arrow.translate(0,500,0)
+  
+  -- sky
+  sky = w.cloneModelFromCastmember ("SkyBoxBG", "SkyBox"&pStyle, styleMember)
+  sky.scale(50.0)
+  sky.translate(0, -10000, 0)
+  pBgT = sky.getWorldTransform()
+  --pBgT = transform()
+  
+  --snowflakes
+  if pStyle = "Snowy" then
+    snowflake = []
+    snowflake.add(w.cloneModelFromCastmember ("SnowFlake", "SnowFlake", styleMember))
+    tn = transform()
+    tn.position = course.worldPosition
+    snowflake[1].transform = tn
+    --snowflake[1].rotate(0,180,0)
+    cm = camStart[holeNum]
+    if cm<>1 then
+      repeat with i = cm to 4
+        --put "rotated"
+        snowflake[1].rotate(course.worldPosition,vector(0,1,0),-90,#world)
+      end repeat
+    end if
+    repeat with i = 2 to 256
+      snowflake.add(w.model("SnowFlake").clone("SnowFlake"&i))
+      --snowflake[1].addChild(snowflake[i],#preserveParent)
+    end repeat
+    num = 1
+    repeat with i = 1 to 8
+      repeat with j = 1 to 8
+        repeat with k = 1 to 4
+          ran = 160 - random(320)
+          xm = ((j * 200) - 600) * i
+          ym = ((k * 200) - 200) * i
+          zm = (i * -500) + 1600
+          snowflake[num].translate(xm+ran,ym+ran,zm+ran)
+          num = num + 1
+        end repeat
+      end repeat
+    end repeat
+    w.texture("SnowFlake").renderFormat = #rgba4444
+  end if
+  
+  
+  -- overlays
+  bf = w.newTexture("BlackFade",#fromCastMember, member("black"))
+  w.camera[1].addOverlay(bf, point(0, 0), 0)
+  w.camera[1].overlay[1].scale = 600
+  w.camera[1].overlay[1].blend = 100
+  blackFade = 100
+  
+  --extra objects
+  pTeleA = []
+  pTeleB = []
+  pTeleAll = []
+  pSpinner = []
+  c = w.model.count
+  
+  repeat with i = 1 to c
+    m = w.model[i]
+    if chars(m.name, 1, 7) = "Spinner" then
+      if pSpinner.count = 0 then 
+        pSpinner.add(w.cloneModelFromCastmember("Spinner0", "Spinner", bitsMember))
+      else
+        pSpinner.add(pSpinner[1].clone("Spinner" & pSpinner.count))
+      end if
+      m.addChild(pSpinner[pSpinner.count], #preserveParent)
+    else if chars(m.name, 1, 8) = "Teleport" then
+      if pTeleAll.count = 0 then 
+        tp = w.cloneModelFromCastmember("Teleport0", "Teleport", bitsMember)
+      else
+        tp = w.model("Teleport0").clone("Teleport" & pTeleAll.count)
+      end if
+      pTeleAll.add(m)
+      m.addChild(tp, #preserveParent)
+      if chars(m.name, 9, 9) = "G" then
+        pTeleA.add(m)
+      else
+        pTeleB.add(m)
+      end if
+    end if
+  end repeat
+  
+  -- textures
+  repeat with i = 1 to w.shader.count
+    s = w.shader[i]
+    sn = chars(s.name,1,3)
+    if  sn = "Sky" and s.texture[1]<>VOID then
+      s.diffuse = rgb(255,255,255)
+      s.texture[1].renderFormat = #rgba8880
+      s.textureRepeatList[1] = false
+    end if
+  end repeat
+  
+  --w.shader("ArrowShader").ambient = rgb(0, 0, 0)
+  --w.shader("ArrowEdgesShader").ambient = rgb(255, 0, 0)
+  w.shader("ShadowShader").blend = 50
+  w.texture("ShadowCol").renderFormat = #rgba4444
+  
+  if pStyle = "Space" then w.shader("CubeShader").blend = 23
+  
+  if pTeleAll.count>0 then
+    w.shader("TeleportShader").texture[1].renderFormat = #rgba4444
+  end if
+  if pSpinner.count>0 and pStyle="Snowy" then
+    w.shader("TreeTrunkShader").ambient = rgb(86, 47, 12)
+    w.texture("Tree").renderFormat = #rgba4444
+  end if
+  
+  t = w.newTexture("GlowEdges", #fromCastMember, member("Glow"))
+  w.shader("EdgesShader").diffuse = color(255, 255, 255)
+  w.shader("EdgesShader").emissive = color(255, 255, 255)
+  w.shader("EdgesShader").textureList[1] = t
+  w.shader("EdgesShader").textureModeList[1] = #wrapSpherical
+end
+
+on createBall
+  
+  ball = w.cloneModelFromCastmember ("Ball", "Ball", bitsMember)
+  --ball = w.model("BallSnowy")
+  ball.addModifier(#meshdeform)
+  
+  ballRB = hk.makeMovableRigidBody(ball.name, 1, true, #sphere)
+  ballRB.restitution = 2--2
+  ballRB.friction = 0.8--0.8
+  
+  tn = startNull.getWorldTransform()
+  ballRB.linearVelocity = vector(0,0,0)
+  ballRB.angularVelocity = vector(0,0,0)
+  ballRB.attemptMoveTo(tn.position, [vector(0,1,0), 0])
+  
+end
+
+on initVars
+  -- initialise game variables
+  
+  ballStopCheck = 10
+  
+  arrowYmax = 20
+  arrowY = -arrowYmax
+  
+  -- ball force axis
+  xa = course.transform.xAxis
+  za = course.transform.zAxis
+  dirList = [-za,za,-xa,xa,-xa,xa,za,-za,za,-za,xa,-xa,xa,-xa,-za,za]
+  
+  --bg rotation vectors
+  bgRot = 0.3
+  pBGRots = [vector(bgRot,0,0),vector(0,0,-bgRot),vector(-bgRot,0,0),vector(0,0,-bgRot),\
+vector(0,0,-bgRot),vector(-bgRot,0,0),vector(0,0,bgRot),vector(bgRot,0,0)]
+  
+  pHorizLevel = 0
+  pVertLevel = 0
+  pLevelMax = 200 --sets the top speed and affects inertia - don't change
+  pInertia = 2--0.8 --lower number means slower to react
+  pPowerFactor = 10--15.0 --lower means more power
+  
+  playMode = "START"
+  
+  if gMode.demo then
+    n = gMode.id
+  else
+    n = holeNum
+  end if
+  
+  info = "COURSE " & n
+  setVariable(sprite(1), "info", info)
+  sprite(1).setVariable("levelNum", String(n))
+  sprite(1).packs = 0
+  
+  pPacksCollected = 0
+  pProtected = [#mode:false, #startTime:0]
+  
+  prevCamMode = camMode
+  
+end
+
+on setTime
+  return
+  timeGone = the Timer - pStartTime
+  ticksToGo = (2 * 60 * 60) - timeGone
+  if ticksToGo<0 then 
+    sprite(1).setVariable("info", "Whoops! You ran out of time on level " & holeNum)
+    sprite(1).setVariable("scoreinfo", "You scored " & gScore)
+    moveFlash "endgame"
+    playMode = "ENDGAME"
+  else
+    ntSecs = integer(ticksToGo/60.0)
+    ntMins = integer(ntSecs/60.0)
+    ntSecs = integer(ntSecs - (ntMins*60.0))
+    if ntSecs<0 then
+      ntMins = ntMins - 1
+      ntSecs = ntSecs + 60
+    end if
+    if ntMins<10.0 then
+      ntMins = "0" & String(ntMins)
+    end if
+    if ntSecs<10.0 then
+      ntSecs = "0" & String(ntSecs)
+    end if
+    pTimeStr = String(ntMins) & ":" & String(ntSecs)
+    setVariable(sprite(1), "time", pTimeStr)
+  end if
+end
+
+on enterFrame
+  
+  spinStuff
+  
+  --set arrow
+  cp = cam.worldPosition
+  cp.y = arrow.transform.position.y
+  arrow.pointAt(cp,vector(0,1,0))
+  arrowY = arrowY + 1
+  if arrowY>=arrowYmax then
+    arrowY = -arrowYmax
+  end if
+  if arrowY>=0 then
+    arrow.translate(0,6,0)
+  else
+    arrow.translate(0,-6,0)
+  end if
+  
+  skyRotV = 0
+  skyRotH = 0
+  if playMode = "ACTIVE" then
+    checkkeys
+    c = (camMode - 1) * 4
+    moved = false
+    if upkey then
+      if pVertLevel<pLevelMax then
+        skyRotV = 1
+        pVertLevel = pVertLevel + pInertia
+      end if
+      p = ((pLevelMax*0.5) + pVertLevel)/pPowerFactor
+      hitV = dirList[c+1] * p
+      moved = true
+    else if downkey then
+      if pVertLevel>-pLevelMax then
+        skyRotV = -1
+        pVertLevel = pVertLevel - pInertia
+      end if
+      p = ((pLevelMax*0.5) - pVertLevel)/pPowerFactor
+      hitV = dirList[c+2] * p
+      moved = true
+    else if leftkey then
+      if pHorizLevel<pLevelMax then
+        skyRotH = 1
+        pHorizLevel = pHorizLevel + pInertia
+      end if
+      p = ((pLevelMax*0.5) + pHorizLevel)/pPowerFactor
+      hitV = dirList[c+3] * p
+      moved = true
+    else if rightkey then
+      if pHorizLevel>-pLevelMax then
+        skyRotH = -1
+        pHorizLevel = pHorizLevel - pInertia
+      end if
+      p = ((pLevelMax*0.5) - pHorizLevel)/pPowerFactor
+      hitV = dirList[c+4] * p
+      moved = true
+    end if
+    if moved then
+      ballRB.applyImpulse(hitV)
+    end if
+    -- rotate bg
+    
+    if skyRotV<>0 then
+      sky.rotate(pBGRots[camMode]*skyRotV)
+    else if skyRotH<>0 then
+      sky.rotate(pBGRots[camMode+4]*skyRotH)      
+    end if
+    -- set the time
+    setTime
+  else if playMode = "TELE" then
+    if pHeight>300 then
+      ballRB.linearVelocity = vector(0,0,0)
+      ballRB.angularVelocity = vector(0,0,0)
+      ballRB.attemptMoveTo(pTelePos.position, [vector(0,1,0), 0])
+      playMode = "ACTIVE"
+    end if
+    setTime
+  end if
+  
+  
+  -- get speed and position info
+  if playMode = "ENDGAME" then 
+    go to "endgame"
+    return
+  end if
+  
+  getInfo
+  
+  -- check speed and proximity to finish
+  if pSpeed < 70 and playMode = "ACTIVE" then
+    inHole = checkHole()
+    if inHole then 
+      endHole
+      ballRB.active = false
+      if holeNum=12 then
+        movingBitsRB[1].active = false
+        movingBitsRB[2].active = false
+        --else if holeNum>=13 then
+        --movingBitsRB[1].active = false
+      end if
+    end if
+  end if
+  
+  p = ball.worldPosition
+  dist = p.x * p.x + p.y * p.y + p.z * p.z
+  if dist>1000000000 then
+    -------------- lost ball over edge or spun off----------------------
+    gLives = gLives - 1
+    if gLives = 0 then
+      if gMode.demo then 
+        n = gMode.id
+      else
+        n = holeNum
+      end if
+      sprite(1).setVariable("info", "Whoops! You ran out of lives on level " & n)
+      sprite(1).setVariable("scoreinfo", "You scored " & gScore)
+      moveFlash "endgame"
+      playMode = "ENDGAME"      
+    else
+      tn = startNull.getWorldTransform()
+      put tn.position
+      ballRB.linearVelocity = vector(0,0,0)
+      ballRB.angularVelocity = vector(0,0,0)
+      res = ballRB.attemptMoveTo(tn.position, [vector(0,1,0), 0])
+      if not res then
+        ballRB.position = tn.position
+      end if
+      sprite(1).setVariable("lives", String(gLives))
+      sky.transform = pBgT
+      pHorizLevel = 0
+      pVertLevel = 0
+    end if
+  end if
+  
+  if playMode = "START" or playMode = "HOLED" then
+    fadeHole
+  end if
+  
+  hk.step()
+  
+  if playMode = "ACTIVE" then
+    checkTeles
+    checkSpinners
+    checkPacks
+  end if
+  
+  setShadow
+  
+  if pStyle="Snowy" then moveSnow
+  
+  if keypressed("q") then 
+    --playMode = "FINISHED"
+    --gScore = 1000000
+    --holeNum = 15
+    --go to 15
+  end if
+end
+
+on checkPacks
+  pos = ball.worldPosition
+  repeat with i = 1 to pPacks.count
+    m = pPacks[i]
+    if m.visibility = #front then 
+      v = pos - m.worldPosition
+      dist = v.x * v.x + v.y * v.y + v.z * v.z
+      if dist<10000 then
+        boxname = m.parent.name
+        if boxname = "BoxCornflakes" then
+          sprite(1).setVariable("pack1", "found")
+          gLives = gLives + 2
+          sprite(1).lives = gLives
+          m.visibility = #none
+          soundFX "munch", 3, 255
+        else if boxname = "BoxFrosties" and pProtected.mode = false then
+          sprite(1).setVariable("pack2", "found")
+          pProtected = [#mode:true, #startTime:_system.milliseconds, #shield:m]
+          m.scale(0.6)
+          soundFX "munch", 3, 255
+        else if boxname = "BoxCoco" then
+          gLives = gLives + 1
+          sprite(1).lives = gLives
+          sprite(1).setVariable("pack3", "found")
+          m.visibility = #none
+          soundFX "munch", 3, 255
+        else if boxname = "BoxRK" then
+          pPacksCollected = pPacksCollected + 3
+          packScore = pPacksCollected * 350 * holeNum
+          sprite(1).setVariable("packs", String(packScore))
+          sprite(1).setVariable("pack4", "found")
+          m.visibility = #none
+          soundFX "munch", 3, 255
+        else if boxname = "BoxLoops" then
+          pPacksCollected = pPacksCollected + 1
+          packScore = pPacksCollected * 350 * holeNum
+          sprite(1).setVariable("packs", String(packScore))
+          sprite(1).setVariable("pack5", "found")
+          m.visibility = #none
+          soundFX "munch", 3, 255
+        else if boxname = "BoxRicicles" then
+          pPacksCollected = pPacksCollected + 2
+          packScore = pPacksCollected * 350 * holeNum
+          sprite(1).setVariable("packs", String(packScore))
+          sprite(1).setVariable("pack6", "found")
+          m.visibility = #none
+          soundFX "munch", 3, 255
+        end if
+      end if
+    end if
+  end repeat
+end
+
+on moveSnow
+  rate = float(the Timer)/500.0
+  repeat with i = 1 to 256
+    row = integer(i/20) * rate
+    col = (i mod 20) * rate
+    xm = sin(row)*cos(col)*3
+    zm = sin(col)*cos(row)*2
+    snowflake[i].translate(xm,-3,zm)
+    if snowflake[i].transform.position.y<-100 then
+      snowflake[i].translate(0,700,0)
+    end if
+    if camMode<>prevCamMode then
+      snowflake[i].rotate(course.worldPosition,vector(0,1,0),90,#world)
+    end if
+  end repeat
+  prevCamMode = camMode
+end
+
+on setShadow
+  -- set shadow
+  --put pHeight
+  if pHeight>0 then
+    pShadow.worldPosition = ball.worldPosition
+    pShadow.translate(0, -pHeight + 20, 0)
+  else
+    pShadow.transform.position = vector(0,-100000,0)
+  end if
+end
+
+on getInfo
+  pSpeedVector = ballRB.linearVelocity
+  pSpeed = pSpeedVector.magnitude
+  pBallPos = ball.worldPosition
+  
+  pHeight = 0
+  wpoint = pBallPos
+  wdown = vector(0,-1,0) 
+  opts = [#maxDistance:80, #levelOfDetail:#detailed, #modelList:[course]]
+  idetails = w.modelsUnderRay(wpoint, wdown, opts)
+  if idetails.count>0 then
+    repeat with i = 1 to idetails.count
+      mn = idetails[i].model.name
+      --surfOK = false
+      --if surfOK then
+      pHeight = idetails[i].distance
+      pGroundPos = idetails[i].isectPosition
+      pGroundNorm = idetails[i].isectNormal
+      pGroundSurf = idetails[i].meshID
+      --put pGroundSurf
+      exit repeat
+      --end if
+    end repeat
+  end if
+end
+
+on endHole
+  timeScore = 7200 - (the Timer - pStartTime)
+  timeScore = integer(timeScore*0.5)
+  if timeScore<0 then timeScore = 10
+  if gMode.demo then
+    n = gMode.id
+  else
+    n = holeNum
+  end if
+  timeScore = timeScore * holeNum
+  sprite(1).setVariable("timeinfo", "Time remaining: " & pTimeStr & " = " & timeScore & " points")
+  packScore = pPacksCollected * 350 * holeNum
+  sprite(1).setVariable("packinfo", "Bonuses collected: " & pPacksCollected & " = " & packScore & " points")
+  levelScore = timeScore + packScore
+  gScore = gScore + levelScore
+  put "endHole gScore = " & gScore
+  sprite(1).setVariable("scoreinfo", "Level " & n & " Score = " & levelScore & RETURN & "  Total Score = " & gScore)
+  soundFX "ground", 2, 255
+  playMode = "HOLED"
+end
+
+on checkHole
+  dist = ball.worldPosition.distanceTo(finishNull.worldPosition)
+  --put "distance to hole = " & dist
+  if dist<150 then
+    ballStopCheck = ballStopCheck - 1
+  else
+    ballStopCheck = 10
+  end if
+  if ballStopCheck<=0 then 
+    return true
+  else
+    return false
+  end if
+end
+
+on fadeHole
+  if playMode = "HOLED" then
+    blackFade = blackFade + 1
+    if blackFade = 100 then 
+      playMode = "FINISH"
+      go to the frame + 1
+    end if
+  else
+    blackFade = blackFade - 1
+    if blackFade = 0 then
+      pStartTime = the Timer
+      playMode = "ACTIVE"
+    end if
+  end if
+  w.camera[1].overlay[1].blend = blackFade
+end
+
+on spinStuff
+  -- spinners
+  repeat with i = 1 to pSpinner.count
+    pSpinner[i].rotate(0,-20,0)  
+  end repeat
+  --spin all teleporters
+  repeat with i = 1 to pTeleAll.count
+    pTeleAll[i].rotate(0,40,0)
+    --pTeleAll[i].child[1].child[1].rotate(0, -60, 0)
+  end repeat
+  
+  w.shader("EdgesShader").textureTransformList[1].rotate(0, 0, 0.2)
+end
+
+on checkTeles
+  if pProtected.mode then return
+  -- check distance to teles
+  repeat with i = 1 to pTeleB.count
+    v = pBallPos - pTeleB[i].worldPosition
+    dist = ((v.x * v.x) + (v.y * v.y) + (v.z * v.z))
+    if dist<20000 then
+      pTelePos = pTeleA[1].getWorldTransform()
+      pTelePos.position.y = pTelePos.position.y + 300
+      ballRB.linearVelocity = ballRB.linearVelocity * 0.2
+      ballRB.applyImpulse(vector(0,400,0))
+      playMode = "TELE"
+    end if
+  end repeat
+end
+
+on checkSpinners
+  if pProtected.mode then
+    tm = _system.milliseconds - pProtected.startTime
+    pProtected.shield.worldPosition = ball.worldPosition
+    pProtected.shield.translate(0, 100, 0)
+    if tm<30000 then return
+    pProtected.shield.visibility = #none
+    pProtected.mode = false
+  end if
+  
+  --check distance to all spinners
+  repeat with i = 1 to pSpinner.count
+    
+    v = pBallPos - pSpinner[i].worldPosition
+    dist = ((v.x * v.x) + (v.y * v.y) + (v.z * v.z))
+    if dist<30000 then
+      --soundFX "sfxPacket", 8, 255
+      temp = v.x
+      v.x = -v.z
+      v.z = temp
+      v.y = 0
+      vm = (301 - dist)/300
+      v = v * vm
+      ballRB.applyImpulse(v)
+    end if
+  end repeat
+end
+
+on checkkeys
+  leftkey = false
+  rightkey = false
+  downkey = false
+  upkey = false
+  spacekey = false
+  if keypressed(123) then leftkey = true
+  if keypressed(124) then rightkey = true
+  if keypressed(125) then downkey = true
+  if keypressed(126) then upkey = true
+  if keypressed(" ") then spacekey = true
+  
+  if _DEBUG then
+    if keypressed("s") or keypressed("S") then 
+      if soundBusy(1) then
+        sound(1).stop()
+      else
+        sound(1).play(member("music"))
+      end if
+    end if
+    
+    if keypressed("1") then 
+      gNewLevel = 1
+      playMode = "HOLED"
+    else if keypressed("2") then 
+      gNewLevel = 4
+      playMode = "HOLED"
+    else if keypressed("3") then 
+      gNewLevel = 7
+      playMode = "HOLED"
+    else if keypressed("4") then 
+      gNewLevel = 10
+      playMode = "HOLED"
+    else if keypressed("5") then 
+      gNewLevel = 13
+      playMode = "HOLED"
+    end if
+  end if
+end
+
+on endSprite me
+  
+  hk.shutdown()
+  w.resetWorld()
+  
+end
+
+
+

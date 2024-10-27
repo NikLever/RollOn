@@ -73,6 +73,10 @@ export class Game{
 
     }
 
+    logVector3( v, name, precision = 2 ){
+        console.log( `${name} = ${v.x.toFixed(precision)}, ${v.y.toFixed(precision)}, ${v.z.toFixed(precision)}`)
+    }
+
     loadSounds(){
         const snds = [
             'boing',
@@ -157,7 +161,8 @@ export class Game{
     }
 
     initLevelPhysics(){
-        this.physics.addMesh(this.ball, 1);
+        this.physics.reset();
+        this.physics.addMesh(this.ball, 0.5);
         this.physics.addMesh(this.collider);
         this.stepPhysics = true;
     }
@@ -238,7 +243,7 @@ export class Game{
         this.level.forEach( mesh => {
             if (!mesh.userData.noDispose){
                 if (mesh.geometry) mesh.geometry.dispose();
-                if (mesh.material){
+                if (mesh.material && !mesh.name.startsWith("Level")){
                     if (mesh.material.map) mesh.material.map.dispose();
                     mesh.material.dispose();
                 }
@@ -249,6 +254,10 @@ export class Game{
 
     loadLevel(index){
         if ( this.level ) this.clearLevel();
+
+        this.levelIndex = index;
+
+        if (localStorage) localStorage.setItem( 'levelIndex', index );
 
         const loader = new GLTFLoader( ).setPath('levels/');
         const dracoLoader = new DRACOLoader();
@@ -264,6 +273,8 @@ export class Game{
             // called when the resource is loaded
             gltf => {
                 this.level = [];
+                this.spinners = [];
+                this.teleports = [];
                 let obj;
                 gltf.scene.traverse( child => { 
                     obj = child;
@@ -271,27 +282,45 @@ export class Game{
                         let name = child.name;
                         const idx = name.indexOf( '0' );
                         if (idx != -1) name = name.substring(0, idx);
+                        //name.toLowerCase();
                         console.log(`Game.loadLevel ${name}`)
                         switch(name){
                         case "Collider":
-                            child.visible = false;
+                            //child.visible = false;
                             this.collider = child;
-                            this.level.push(child);
+                            //this.level.push(child);
                             break;
                         case "start":
                             this.ball.position.copy(child.position);
                             break;
                         case "finish":
+                            this.arrow = this.bits['Arrow'].clone();
+                            this.arrow.position.copy(child.position).add(this.tmpVec3.set(0, 2, 0));
+                            this.level.push(this.arrow);
+                            this.arrow.userData.noDispose = true;
                             this.finish = child;
                             break;
                         case "Level":
                             this.level.push(child);
                             break;
+                        case "Teleport":
+                            const teleport = this.bits[name].clone();
+                            teleport.position.copy(child.position);
+                            this.level.push(teleport);
+                            teleport.userData.noDispose = true;
+                            this.teleports.push( teleport );
+                            break;
+                        case "Spinner":
+                            const spinner = this.bits[name].clone();
+                            spinner.position.copy(child.position);
+                            this.level.push(spinner);
+                            spinner.userData.noDispose = true;
+                            this.spinners.push( spinner );
+                            break;
                         }
                         if (name.startsWith("Box")){
                             const pickup = this.bits[name].clone();
                             pickup.position.copy(child.position);
-                            //this.scene.add(pickup);
                             this.level.push(pickup);
                             pickup.userData.noDispose = true;
                         }
@@ -300,9 +329,24 @@ export class Game{
 
                 this.level.forEach( mesh => {
                     this.scene.add(mesh);
-                })
-                
+                });
 
+                this.tmpVec3.copy( this.ball.position ).sub( this.finish.position );
+                this.tmpVec3.y = 0;
+                this.tmpVec3.normalize().multiplyScalar( 5 );
+                this.tmpVec3.y = 3;
+                this.camera.position.copy( this.ball.position ).add( this.tmpVec3 );
+                this.logVector3( this.camera.position, 'camera before update' );
+                this.controls.minDistance = 0;
+                this.controls.maxDistance = 700;
+                this.controls.update();
+                this.controls.minDistance = this.controls.maxDistance = 7;
+
+                this.logVector3( this.ball.position, 'start' );
+                this.logVector3( this.finish.position, 'finish' );
+                this.logVector3( this.tmpVec3, 'offset' );
+                this.logVector3( this.camera.position, 'camera after update' );
+                
                 if (this.physics.isReady) this.initLevelPhysics();
             },
             // called while loading is progressing
@@ -314,6 +358,12 @@ export class Game{
 
             }  
         );
+    }
+
+    spinStuff(){
+        if (this.arrow) this.arrow.rotateZ( 0.01 );
+        this.spinners.forEach( spinner => spinner.rotateY( 0.1 ) );
+        this.teleports.forEach( teleport => teleport.rotateY( 0.03 ) );
     }
 
     update(){
@@ -343,6 +393,9 @@ export class Game{
             this.camera.position.y = this.ball.position.y + 4;
             this.controls.update();
         }
+
+        this.spinStuff();
+
         //if (this.tween) this.tween.update(dt);
         this.renderer.render( this.scene, this.camera );  
     }

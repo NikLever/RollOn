@@ -1,0 +1,268 @@
+global playMode, cam, camMode, camBuffer, camStart
+global holeNum, memberLoading, gameLoaded, gScore, gLives, gMode
+global gGameList, gIgnoreFrameScript, styleNum, gDest
+
+on prepareMovie
+  --_player.debugPlaybackEnabled = true
+  the keyDownScript = "keyDownCheck"
+  gameLoaded = false
+  sw3 = "demo"
+  sw4 = 0
+  --Demo version active and levels 
+  ParamCount = externalParamCount()
+  if ParamCount > 1 then      
+    repeat with n = 1 to ParamCount
+      tName = externalParamName(n)
+      if tName = "sw2" then
+        sw2 = externalParamValue(n)
+      else if tName = "sw3" then
+        sw3 = externalParamValue(n)
+      else if tName = "sw4" then
+        sw4 = externalParamValue(n)
+      end if  
+    end repeat
+  end if
+  d = false
+  e = false
+  if sw3 = "demo" or sw3 = "web" then d = true
+  if sw3 = "ro77_0n!" or sw3 = "demo" then e = true
+  if sw3 = "ro77_0n!" then getSaved()
+  gMode = [#demo:d, #demolevels:[1, 4, 7, 10, 13, 16, 19, 47], #id:1, #exe:e, #res:value(sw4), #gameon:false]
+  put gMode
+  gScore = 0
+  gLives = 0
+  holeNum = 0
+  gDest = ""
+  --                            10                  20                  30                  40
+  camStart = [2,1,2,3,3,3,1,2,2,2,3,2,2,3,1,4,1,1,2,2,1,1,2,2,1,4,1,1,1,1,2,2,1,1,3,2,4,1,4,1,2,4,2,4,1,1,1,2,3,2]
+  _movie.go("endscript")
+end
+
+on newGame
+  gMode.gameon = true
+  if gMode.demo then
+    gMode.id = 1
+    holeNum = gMode.demolevels[gMode.id]
+  else
+    holeNum = 1
+  end if
+  if holeNum <= 21 then
+    styleNum = integer((holeNum + 1)/3.0)
+  else
+    styleNum = (holeNum - 21) mod 7
+    styleNum = styleNum + 1
+  end if
+  gScore = 0
+  gLives = 5
+  sprite(1).levelNum = holeNum
+  sprite(1).score = gScore
+  sprite(1).lives = gLives
+  soundFX "music", 1, 150
+  gDest = "newhole"
+end
+
+on newLevel
+  gDest = "newhole"
+end
+
+on playLevel
+  gDest = "playlevel"
+end 
+
+on moveFlash flabel
+  put "moveFlash " & flabel
+  sprite(1).score = gScore
+  sprite(1).demo = gMode.demo
+  sprite(1).exe = gMode.exe
+  if gMode.gameon then
+    if gMode.demo then
+      sprite(1).levelNum = gMode.id
+    else
+      sprite(1).levelNum = holeNum
+    end if
+  end if
+  sprite(1).score = gScore
+  sprite(1).lives = gLives
+  sprite(1).screenSize = gMode.res
+  sprite(1).gotoAndStop(flabel)
+end
+
+on soundFX fxMember, fxChannel, fxVol
+  if not soundBusy(fxChannel) then
+    sound(fxChannel).volume = fxVol
+    sound(fxChannel).play(member(fxMember))
+  end if
+  -- channels
+  -- 1 music
+  -- 2 snow sound
+  -- 3 snow turn
+  -- 4 crash
+  -- 5 crowd
+  -- 6 Tony 
+  -- 7 Tony 2
+  -- 8 packet collect
+end
+
+on keyDownCheck
+  if the key = " " then
+    if camMode<4 then
+      camMode = camMode + 1
+    else
+      camMode = 1
+    end if
+  end if
+  
+end
+
+on getfull
+  gotoNetPage "https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=nik@catalystpics.co.uk&currency=USD&item_name=RollOn&item_number=Catalyst&amount=9.95"
+  if gMode.exe then externalEvent "quit"
+end
+
+on moregames
+  gotoNetPage "http://www.catalystpics.co.uk/games.html"
+  if gMode.exe then externalEvent "quit"
+end
+
+on getSaved
+  gGameList = []
+  gameList = "none"
+  externalEvent "getSaved"
+  repeat while gameList = "none"
+    ParamCount = externalParamCount()
+    if ParamCount > 1 then      
+      repeat with n = 1 to ParamCount
+        tName = externalParamName(n)
+        if tName = "sw7" then
+          gameList = externalparamValue(n)
+        end if  
+      end repeat
+    end if
+  end repeat
+  
+  gameCount = integer((the number of words in gameList))
+  
+  repeat with i = 1 to gameCount
+    tmp = gameList.word[i]
+    put tmp
+    gname = ""
+    repeat with j = 1 to tmp.length
+      if tmp.char[j]="_" then
+        gname = gname & " "
+      else
+        gname = gname & tmp.char[j]
+      end if
+    end repeat
+    if gname="#?!!#" then 
+      gGameList[i]="<empty>"
+    else
+      gGameList[i] = gname
+    end if
+    sprite(1).setVariable("gameName" & i, gGameList[i])
+  end repeat
+end
+
+on saveGame
+  id = sprite(1).gameID
+  gnameF = sprite(1).gameName
+  
+  put "id = " & id && "name = " & gnameF
+  
+  wc = the number of words in gnameF
+  if wc>1 then
+    gname = ""
+    repeat with i = 1 to wc
+      gname = gname & gnameF.word[i] 
+      if i<wc then gname = gname & "_"
+    end repeat
+  else
+    gname = gnameF
+  end if
+  
+  put "updated name = " & gname
+  
+  txt = "saveGame(" & id & "," & gname & "," & gScore & "," & holeNum & "," & gLives & ")"
+  
+  put txt
+  
+  externalEvent txt
+  sprite(1).saveInfo = "game saved successfully"
+end
+
+on loadGameB
+  holeNum = 5
+  gScore = 55000
+  gLives = 9
+  gIgnoreFrameScript = true
+  soundFX "music", 1, 150  
+  _movie.go("newhole")
+end
+
+on loadGame
+  id = getVariable(sprite(1), "gameID")
+  gGameID = value(id)
+  externalEvent "setGame(" &id& ")"
+  
+  holeNum = 0
+  
+  repeat while holeNum = 0
+    ParamCount = externalParamCount()
+    if ParamCount > 1 then      
+      repeat with n = 1 to ParamCount
+        tName = externalParamName(n)
+        if tName = "sw6" then
+          gLives = externalparamValue(n)
+        end if
+        if tName = "sw8" then
+          gScore = externalparamValue(n)
+        end if  
+        if tName = "sw9" then
+          holeNum = externalparamValue(n)
+        end if
+      end repeat
+    end if
+  end repeat
+  
+  holeNum = value(holeNum)
+  gScore = value(gScore)
+  gLives = value(gLives)
+  
+  if holeNum <= 21 then
+    styleNum = integer((holeNum + 1)/3.0)
+  else
+    styleNum = (holeNum - 21) mod 7
+    styleNum = styleNum + 1
+  end if
+  
+  sprite(1).setVariable("packinfo", "")
+  sprite(1).setVariable("scoreinfo", "Total Score = " & gScore)
+  
+  gIgnoreFrameScript = true
+  put "holeNum = " & holeNum && "gScore = " & gScore && "gLives = " & gLives
+  
+  soundFX "music", 1, 150
+  gMode.gameon = true
+  
+  gDest = "newhole"
+end
+
+on flashSFX
+  sprite(1).telltarget("sfx")
+  sprite(1).frame = 2
+  sprite(1).endtelltarget()
+end
+
+on quitGame
+  externalEvent "quit"
+end
+
+on fullScreenRes
+  externalEvent "fullScreenRes(" & sprite(1).screenSize & ")" 
+end
+
+on sizeWindow
+  if sprite(1).screenSize>0 then
+    externalEvent "resize"
+  end if
+end
+
