@@ -24,6 +24,16 @@ export class UI{
 				this.store.levelIndex = data.levelIndex;
 				this.store.score = data.score;
 				this.store.balls = data.balls;
+
+				if (data.balls<0){
+					this.store.levelIndex = 1;
+					this.store.score = 0;
+					this.store.balls = 5;
+				}
+
+				if (data.levelIndex>50){
+					this.store.levelIndex = 3;
+				}
 			}
 		}
 
@@ -51,6 +61,10 @@ export class UI{
 
 	get level( ){
 		return this.store.levelIndex;
+	}
+
+	incBonus( value ){
+		this.bonus += value;
 	}
 
     set bonus( value ){

@@ -30,8 +30,11 @@ export class Game{
 
         this.clock = new Clock();
 
+        this.state = Game.modes.INITIALISING;
+
         this.raycaster = new Raycaster();
         this.down = new Vector3(0, -1, 0);
+        this.up = new Vector3( 0, 1, 0 );
 
         this.tmpVec3 = new Vector3();
         this.tmpVec3b = new Vector3();
@@ -166,6 +169,7 @@ export class Game{
         this.physics.addMesh(this.ball, 0.5);
         this.physics.addMesh(this.collider);
         this.stepPhysics = true;
+        this.state = Game.modes.ACTIVE;
     }
 
     setEnvironment(){
@@ -201,24 +205,22 @@ export class Game{
                 gltf.scene.traverse( child => {
 
                     if (child.isMesh){
+                        //console.log(`Game.loadBits ${child.name}`);
                         switch(child.name){
                             case "Ball":
                                 this.bits[child.name] = child;
                                 const geometry = new SphereGeometry(0.3);
                                 this.ball = new Mesh(geometry, child.material);
                                 this.ball.castShadow = true;
-                                //console.log(`Game.loadBits ${child.name}`);
                                 break;
                             default:
                                 if (child.name.indexOf( '_' ) == -1){
                                     this.bits[child.name] = child;
-                                    //console.log(`Game.loadBits ${child.name}`);
                                 }
                                 break;
                         }
                     }else{
                         this.bits[child.name] = child;
-                        //console.log(`Game.loadBits ${child.name}`);
                     }
 
                 });
@@ -255,9 +257,12 @@ export class Game{
     }
 
     loadLevel(index){
+        this.state = Game.modes.CREATING_LEVEL;
+
         if ( this.level ) this.clearLevel();
 
         this.ui.level = index;
+        this.starsCollected = 0;
 
         const loader = new GLTFLoader( ).setPath('levels/');
         const dracoLoader = new DRACOLoader();
@@ -275,13 +280,18 @@ export class Game{
                 this.level = [];
                 this.spinners = [];
                 this.teleports = [];
+                this.pickups = [];
+                delete this.teleportBase;
                 let obj;
                 gltf.scene.traverse( child => { 
                     obj = child;
                     if (child && child.name){
                         let name = child.name;
-                        const idx = name.indexOf( '0' );
-                        if (idx != -1) name = name.substring(0, idx);
+                        if (name.startsWith("Level")) name = "Level";
+                        if (name.startsWith("Spinner")) name = "Spinner";
+                        if (name.startsWith("Teleport_")) name = "Teleport";
+                        //const idx = name.indexOf( '0' );
+                        //if (idx != -1) name = name.substring(0, idx);
                         //name.toLowerCase();
                         //console.log(`Game.loadLevel ${name}`)
                         switch(name){
@@ -296,7 +306,7 @@ export class Game{
                             break;
                         case "finish":
                             this.arrow = this.bits['Arrow'].clone();
-                            this.arrow.position.copy(child.position).add(this.tmpVec3.set(0, 2, 0));
+                            this.arrow.position.copy(child.position).add(this.tmpVec3.set(0, 3, 0));
                             this.arrow.userData.startPos = this.arrow.position.clone();
                             this.arrow.userData.elapsedTime = 0;
                             this.level.push(this.arrow);
@@ -316,6 +326,10 @@ export class Game{
                             teleport.userData.noDispose = true;
                             this.teleports.push( teleport );
                             break;
+                        case "TeleportG":
+                            this.teleportBase = child.position.clone();
+                            this.teleportBase.y += 0.6;
+                            break;
                         case "Spinner":
                             const spinner = this.bits[name].clone();
                             spinner.position.copy(child.position);
@@ -327,8 +341,10 @@ export class Game{
                         if (name.startsWith("Box")){
                             const pickup = this.bits[name].clone();
                             pickup.position.copy(child.position);
+                            pickup.rotateZ( Math.PI * 0.5 );
                             this.setCastShadow( pickup );
                             this.level.push(pickup);
+                            this.pickups.push(pickup);
                             pickup.userData.noDispose = true;
                         }
                     }
@@ -344,10 +360,9 @@ export class Game{
                 this.tmpVec3.y = 3;
                 this.camera.position.copy( this.ball.position ).add( this.tmpVec3 );
                 //this.logVector3( this.camera.position, 'camera before update' );
-                this.controls.minDistance = 0;
-                this.controls.maxDistance = 700;
-                this.controls.update();
-                this.controls.minDistance = this.controls.maxDistance = 7;
+                this.updateControls();
+
+                this.camera.userData.startPos = this.camera.position.clone();
 
                 //this.logVector3( this.ball.position, 'start' );
                 //this.logVector3( this.finish.position, 'finish' );
@@ -367,6 +382,13 @@ export class Game{
         );
     }
 
+    updateControls(){
+        this.controls.minDistance = 0;
+        this.controls.maxDistance = 700;
+        this.controls.update();
+        this.controls.minDistance = this.controls.maxDistance = 7;
+    }
+
     setCastShadow( obj ){
         obj.traverse( child => {
             if (child.isMesh){
@@ -378,17 +400,88 @@ export class Game{
     spinStuff( dt ){
         if (this.arrow){
             this.arrow.rotateZ( 0.01 );
-            this.arrow.userData.elapsedTime += dt;
+            this.arrow.userData.elapsedTime += (dt * 3);
             this.arrow.position.copy( this.arrow.userData.startPos );
             this.arrow.position.y +=  Math.sin( this.arrow.userData.elapsedTime ) * 0.5;
         }
-        if (this.spinners) this.spinners.forEach( spinner => spinner.rotateZ( 0.1 ) );
+        if (this.spinners) this.spinners.forEach( spinner => spinner.rotateZ( 0.2 ) );
         if (this.teleports) this.teleports.forEach( teleport => teleport.rotateZ( 0.03 ) );
     }
+
+    checkPickups(){
+        let removePickup;
+        const pos = this.ball.position.clone();
+        pos.y -= 0.5;
+        this.pickups.forEach( pickup => {
+            if ( removePickup == null){
+                if ( pos.distanceTo( pickup.position ) < 0.5 ){
+                    console.log( `Pickup: ${pickup.name}`);
+                    switch(pickup.name){
+                        case "BoxCornflakes":
+                            this.ui.balls += 2;
+                            break;                 
+                        case "BoxFrosties":
+                            this.ball.userData.protectedTime = 0;
+                            this.shield.visible = true;
+                            break;
+                        case "BoxCoco":
+                            this.ui.balls++;
+                            break; 
+                        case "BoxRK":
+                            this.starsCollected+=3;
+                            this.ui.incBonus( this.starsCollected * 50 * this.ui.level );
+                            break;
+                        case "BoxLoops":
+                            this.starsCollected++;
+                            this.ui.incBonus( this.starsCollected * 50 * this.ui.level );
+                            break;
+                        case "BoxRicicles":
+                            this.starsCollected+=2;
+                            this.ui.incBonus( this.starsCollected * 50 * this.ui.level );
+                            break;
+                    }
+                    removePickup = pickup; 
+                }
+            }
+        });
+
+        if (removePickup){
+            this.scene.remove( removePickup );
+            const index = this.pickups.indexOf( removePickup );
+            if ( index != -1 ) this.pickups.splice( index, 1 );
+        }
+    }
+
+    checkSpinners(){
+        const pos = this.ball.position.clone();
+        pos.y -= 0.5;
+        this.spinners.forEach( spinner => {
+            if ( pos.distanceTo( spinner.position ) < 1.5 ){
+                this.tmpVec3.copy( pos ).sub( spinner.position ).normalize().cross( this.up );
+                this.physics.applyImpulse( this.ball, this.tmpVec3 );
+            }
+        });
+    }
+
+    checkTeleports(){
+        const pos = this.ball.position.clone();
+        pos.y -= 0.5;
+        this.teleports.forEach( teleport => {
+            if ( pos.distanceTo( teleport.position ) < 1.0 && this.teleportBase ){
+                this.physics.setMeshPosition( this.ball, this.teleportBase );
+                this.tmpVec3.copy( this.teleportBase ).sub( teleport.position ).normalize().add( this.teleportBase );
+                this.tmpVec3.y += 4;
+                this.camera.position.copy( this.tmpVec3 );
+                this.updateControls();
+            }
+        });
+    }  
 
     reset(){
         this.ui.balls--;
         this.ball.position.copy( this.ball.userData.startPosition );
+        this.camera.position.copy( this.camera.userData.startPos );
+        this.updateControls();
         this.initLevelPhysics();
     }
 
@@ -409,13 +502,23 @@ export class Game{
             }
             this.physics.step();
 
-            if (this.ball.position.distanceTo(this.finish.position)<0.2){
-                this.nextLevel();
+            this.spinStuff( dt );
+            this.checkPickups();
+            this.checkSpinners();
+            this.checkTeleports();
+
+            if (this.ball.position.distanceTo(this.finish.position)<0.2 && this.state == Game.modes.ACTIVE){
+                //this.stepPhysics = false;
+                this.state = Game.modes.LEVEL_COMPLETE;
+                this.ui.balls++;
+                setTimeout( this.nextLevel.bind(this), 1000 );
             }
 
             if (this.ball.position.y < -10){
                 this.reset();
             }
+
+            if (this.shield) this.shield.position.copy( this.ball.position );
         }
 
         if (this.controls && this.ball){
@@ -423,8 +526,6 @@ export class Game{
             this.camera.position.y = this.ball.position.y + 4;
             this.controls.update();
         }
-
-        this.spinStuff( dt );
 
         //if (this.tween) this.tween.update(dt);
         this.renderer.render( this.scene, this.camera );  
