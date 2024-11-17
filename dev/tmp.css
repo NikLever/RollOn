@@ -1,0 +1,23 @@
+
+#open-modal-btn{
+    position: fixed;
+    bottom: 50px;
+    right: 30px;
+}
+
+@media only screen and (max-width: 420px) {
+    label {
+        background-color: darkorange;
+        border-radius: 6px;
+        color: maroon;
+        font: 14px "DynaPuff"; 
+        padding: 6px;
+    }
+
+    .primary-btn {
+        padding: 6px;
+        font: 14px "DynaPuff";
+        border-radius: 6px;
+    }
+    
+  }

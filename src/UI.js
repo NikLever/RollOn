@@ -40,6 +40,41 @@ export class UI{
 		this.level = this.store.levelIndex;
 		this.bonus = this.store.score;
 		this.balls = this.store.balls;
+
+		// Modal Functionality
+		const modal = document.getElementById('modal');
+		const openModalBtn = document.getElementById('open-modal-btn');
+		const closeModalBtn = document.getElementById('close-modal-btn');
+
+		openModalBtn.addEventListener('pointerdown', () => {
+			modal.style.display = 'flex';
+		});
+
+		closeModalBtn.addEventListener('pointerdown', () => {
+			modal.style.display = 'none';
+		});
+
+		window.addEventListener('pointerdown', (event) => {
+			if (event.target === modal) {
+				modal.style.display = 'none';
+			}
+		});
+
+		// Tab Functionality
+		const tabButtons = document.querySelectorAll('.tab-btn');
+		const tabPanels = document.querySelectorAll('.tab-panel');
+
+		tabButtons.forEach((button) => {
+			button.addEventListener('click', () => {
+				// Remove active class from all tabs and panels
+				tabButtons.forEach((btn) => btn.classList.remove('active'));
+				tabPanels.forEach((panel) => panel.classList.remove('active'));
+
+				// Add active class to clicked tab and corresponding panel
+				button.classList.add('active');
+				document.getElementById(button.dataset.tab).classList.add('active');
+			});
+		});
     }
 
     startMessages(){

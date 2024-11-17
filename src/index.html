@@ -8,8 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DynaPuff:wght@400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
   <title>RollOn</title>
-  <style>
+  <!--<style>
     body{ padding: 0; margin: 0; }
     canvas{ position: fixed; top: 0; left: 0; }
     #ui{
@@ -28,7 +29,7 @@
       font: 25px "DynaPuff"; 
       padding: 15px;
     }
-  </style>
+  </style>-->
 </head>
 <body>
   <div id="ui">
@@ -36,7 +37,48 @@
     <label id="balls">Balls: 5</label>
     <label id="bonus">Bonus: 0000</label>
     <label id="time">Time: 00:00</label>
+    <button id="open-modal-btn" class="primary-btn">Open Modal</button>
+    <!-- Modal Dialog --> 
+    <div id="modal" class="modal">
+      <div class="modal-content">
+          <div class="modal-header">
+              <h2>Game Options</h2>
+              <button id="close-modal-btn" class="close-btn">&times;</button>
+          </div>
+          <div class="modal-body">
+              <div class="tab-container">
+                  <div class="tabs">
+                      <button class="tab-btn active" data-tab="settings">Settings</button>
+                      <button class="tab-btn" data-tab="instructions">Instructions</button>
+                      <button class="tab-btn" data-tab="credits">Credits</button>
+                  </div>
+                  <div class="tab-content">
+                      <div class="tab-panel active" id="settings">
+                          <h3>Settings</h3>
+                          <p>Adjust game preferences here.</p>
+                          <label>
+                              Sound: 
+                              <input type="checkbox" checked>
+                          </label>
+                      </div>
+                      <div class="tab-panel" id="instructions">
+                          <h3>Instructions</h3>
+                          <p>Learn how to play the game!</p>
+                      </div>
+                      <div class="tab-panel" id="credits">
+                          <h3>Credits</h3>
+                          <p>Meet the creators behind this gentle puzzle game.</p>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
   </div>
+  </div>
+
+
+
+   
   <script type="importmap">
     {
       "imports": {
